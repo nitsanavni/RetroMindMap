@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   childrenOf,
   emptyMap,
+  fromOutline,
   isAncestor,
   makeChild,
   makeSiblingAfter,
@@ -73,6 +74,31 @@ describe("map model", () => {
     expect(toOutline(m)).toBe(
       "Sprint 12\n- Went well\n  - Pairing\n- To improve\n",
     );
+  });
+
+  test("fromOutline round-trips toOutline", () => {
+    const text =
+      "Sprint 12\n- Went well\n  - Pairing\n    - Mobbing\n  - Demos\n- To improve\n- Tests\n";
+    expect(toOutline(fromOutline(text))).toBe(text);
+  });
+
+  test("fromOutline sets parents, order, side and color", () => {
+    const m = fromOutline("Root\n- a\n  - a1\n  - a2\n- b\n- c\n");
+    const [a, b, c] = childrenOf(m, ROOT_ID);
+    expect([a.side, b.side, c.side]).toEqual(["right", "left", "right"]);
+    expect(new Set([a.color, b.color, c.color]).size).toBe(3);
+    const [a1, a2] = childrenOf(m, a.id);
+    expect([a1.text, a2.text]).toEqual(["a1", "a2"]);
+    expect(a1.parentId).toBe(a.id);
+    expect(a1.order).toBeLessThan(a2.order);
+    expect(a1.side).toBeUndefined();
+    expect(m[ROOT_ID].text).toBe("Root");
+  });
+
+  test("fromOutline takes a single bulleted top item as the root", () => {
+    const m = fromOutline("- Plan\n  - one\n  - two\n");
+    expect(m[ROOT_ID].text).toBe("Plan");
+    expect(toOutline(m)).toBe("Plan\n- one\n- two\n");
   });
 });
 

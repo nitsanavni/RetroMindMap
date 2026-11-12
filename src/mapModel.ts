@@ -174,6 +174,45 @@ export function toOutline(nodes: MapNodes, id = ROOT_ID, depth = 0): string {
   );
 }
 
+/**
+ * Inverse of toOutline. A first line without a bullet is the root; if every
+ * line is bulleted, a single top item is the root, else the title is default.
+ * Nesting is two spaces (or a tab) per level; bullets are -, * or +.
+ */
+export function fromOutline(text: string): MapNodes {
+  const items = text
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .map((l) => {
+      const [, indent, bullet, body] = /^([ \t]*)([-*+][ \t]+)?(.*)$/.exec(l)!;
+      const width = indent.replace(/\t/g, "  ").length;
+      return {
+        bullet: !!bullet,
+        depth: Math.floor(width / 2),
+        text: body.trim(),
+      };
+    });
+  const nodes = emptyMap();
+  if (!items.length) return nodes;
+  let rest = items;
+  if (!items[0].bullet) {
+    nodes[ROOT_ID].text = items[0].text;
+    rest = items.slice(1);
+  } else if (items.filter((i) => i.depth === 0).length === 1) {
+    nodes[ROOT_ID].text = items[0].text;
+    rest = items.slice(1).map((i) => ({ ...i, depth: i.depth - 1 }));
+  }
+  const path = [ROOT_ID]; // path[d] = id of the latest node at depth d
+  for (const item of rest) {
+    const depth = Math.min(Math.max(item.depth, 0), path.length - 1);
+    const node = makeChild(nodes, path[depth], item.text);
+    nodes[node.id] = node;
+    path.length = depth + 1;
+    path.push(node.id);
+  }
+  return nodes;
+}
+
 /** HTML outline, so links stay clickable when pasted into docs or chat. */
 export function toOutlineHtml(nodes: MapNodes): string {
   const list = (id: string): string => {

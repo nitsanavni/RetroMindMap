@@ -2,6 +2,7 @@ import "./style.css";
 import { layout, mapBounds, Box } from "./layout";
 import {
   childrenOf,
+  fromOutline,
   isAncestor,
   makeChild,
   makeSiblingAfter,
@@ -66,7 +67,7 @@ app.innerHTML = `
     <button data-action="image" title="Copy the whole map as a picture">Copy image</button>
     <button data-action="outline" title="Copy the map as a bulleted outline">Copy outline</button>
     <button data-action="export">Export</button>
-    <label class="button">Import<input type="file" accept=".json" hidden data-action="import" /></label>
+    <label class="button">Import<input type="file" accept=".json,.txt,.md" hidden data-action="import" /></label>
     <button data-action="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
     <button data-action="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
     <button data-action="center" title="Fit the whole map on screen">Center</button>
@@ -713,6 +714,20 @@ app.querySelector(".toolbar")!.addEventListener("click", async (e) => {
   }
 });
 
+function replaceMap(imported: MapNodes) {
+  store.remove(Object.keys(nodes));
+  for (const node of Object.values(imported)) store.put(node);
+}
+
+/** Only the root, or the untouched PEDDLES starter branches. */
+function isBlankMap(): boolean {
+  return Object.values(nodes).every(
+    (n) =>
+      n.id === ROOT_ID ||
+      (n.id.startsWith("peddles-") && n.parentId === ROOT_ID),
+  );
+}
+
 app
   .querySelector<HTMLInputElement>("[data-action=import]")!
   .addEventListener("change", async (e) => {
@@ -721,13 +736,15 @@ app
     input.value = "";
     if (!file) return;
     try {
-      const imported = JSON.parse(await file.text()) as MapNodes;
+      const content = await file.text();
+      const imported = /\.(txt|md)$/i.test(file.name)
+        ? fromOutline(content)
+        : (JSON.parse(content) as MapNodes);
       if (!imported[ROOT_ID]) throw new Error("no root");
-      store.remove(Object.keys(nodes));
-      for (const node of Object.values(imported)) store.put(node);
+      replaceMap(imported);
       flash("Imported");
     } catch {
-      flash("That file isn't a Retro Mind Map export");
+      flash("That file isn't a Retro Mind Map export or text outline");
     }
   });
 
@@ -758,6 +775,8 @@ openStore(roomFromHash()).then((s) => {
     render();
   });
   publishPresence();
+  const outline = new URLSearchParams(location.search).get("outline");
+  if (outline && isBlankMap()) replaceMap(fromOutline(outline));
   if (document.activeElement === document.body) viewport.focus();
   flash(`Storage: ${store.kind}`);
 });
